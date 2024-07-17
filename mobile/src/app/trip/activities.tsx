@@ -72,6 +72,8 @@ export function Activities({ tripDetails }: Props) {
         title: activityTitle,
       })
 
+      console.log("activityDate ==>", activityDate)
+
       Alert.alert('Nova Atividade', 'Nova atividade cadastrada com sucesso!')
 
       await getTripActivities()
@@ -103,6 +105,11 @@ export function Activities({ tripDetails }: Props) {
           isBefore: dayjs(activity.occurs_at).isBefore(dayjs()),
         })),
       }))
+
+      console.log("activities +++", JSON.stringify(activities, null, 2))
+
+
+      console.log(JSON.stringify(activitiesToSectionList, null, 2))
 
       setTripActivities(activitiesToSectionList)
     } catch (error) {

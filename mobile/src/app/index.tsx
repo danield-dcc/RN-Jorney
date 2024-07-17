@@ -46,6 +46,7 @@ export default function Index() {
   const [destination, setDestination] = useState('')
 
   const [emailToInvite, setEmailToInvite] = useState('')
+
   const [emailsToInvite, setEmailsToInvite] = useState<string[]>([])
 
   function handleNextStepForm() {

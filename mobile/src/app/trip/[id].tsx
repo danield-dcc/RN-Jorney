@@ -45,10 +45,9 @@ export default function Trip() {
   const [showModal, setShowModal] = useState(MODAL.NONE)
 
   const [tripDetails, setTripDetails] = useState({} as TripData)
-  const [options, setOptions] = useState<'activity' | 'details'>('activity')
-  const [destination, setDestination] = useState('')
+  const [option, setOption] = useState<'activity' | 'details'>('activity')
   const [selectedDates, setSelectedDates] = useState({} as DatesSelected)
-
+  const [destination, setDestination] = useState('')
   const [guestName, setGuestName] = useState('')
   const [guestEmail, setGuestEmail] = useState('')
 
@@ -60,6 +59,10 @@ export default function Trip() {
   async function getTripDetails() {
     try {
       setIsLoadingTrip(true)
+
+      if (tripParams.participant) {
+        setShowModal(MODAL.CONFIRM_ATTENDANCE)
+      }
 
       if (!tripParams.id) {
         return router.back()
@@ -81,20 +84,16 @@ export default function Trip() {
 
       setTripDetails({
         ...trip,
-        when: `${destination} de ${starts_at} a ${ends_at} de ${month}`,
+        when: `${destination} de ${starts_at} a ${ends_at} de ${month}.`,
       })
     } catch (error) {
       console.log(error)
     } finally {
       setIsLoadingTrip(false)
     }
-
-    if (isLoadingTrip) {
-      return <LoadingIndicator />
-    }
   }
 
-  function handleSelectedDate(selectedDay: DateData) {
+  function handleSelectDate(selectedDay: DateData) {
     const dates = calendarUtils.orderStartsAtAndEndsAt({
       startsAt: selectedDates.startsAt,
       endsAt: selectedDates.endsAt,
@@ -128,7 +127,7 @@ export default function Trip() {
 
       Alert.alert('Atualizar viagem', 'Viagem atualizada com sucesso!', [
         {
-          text: 'Ok',
+          text: 'OK',
           onPress: () => {
             setShowModal(MODAL.NONE)
             getTripDetails()
@@ -144,27 +143,27 @@ export default function Trip() {
 
   async function handleConfirmAttendance() {
     try {
-      if (!tripParams.participant || !tripParams.id) {
+      if (!tripParams.id || !tripParams.participant) {
         return
       }
 
       if (!guestName.trim() || !guestEmail.trim()) {
         return Alert.alert(
           'Confirmação',
-          'Preencha nome e e-email para confirmar a viagem!',
+          'Preencha nome e e-mail para confirmar a viagem!',
         )
       }
 
       if (!validateInput.email(guestEmail.trim())) {
-        return Alert.alert('Confirmação', 'E-mail inválido')
+        return Alert.alert('Confirmação', 'E-mail inválido!')
       }
 
       setIsConfirmingAttendance(true)
 
       await participantsServer.confirmTripByParticipantId({
         participantId: tripParams.participant,
-        email: guestEmail.trim(),
         name: guestName,
+        email: guestEmail.trim(),
       })
 
       Alert.alert('Confirmação', 'Viagem confirmada com sucesso!')
@@ -174,15 +173,39 @@ export default function Trip() {
       setShowModal(MODAL.NONE)
     } catch (error) {
       console.log(error)
-      Alert.alert('Confirmação', 'Não foi possível confirmar.')
+      Alert.alert('Confirmação', 'Não foi possível confirmar!')
     } finally {
       setIsConfirmingAttendance(false)
+    }
+  }
+
+  async function handleRemoveTrip() {
+    try {
+      Alert.alert('Remover viagem', 'Tem certeza que deseja remover a viagem', [
+        {
+          text: 'Não',
+          style: 'cancel',
+        },
+        {
+          text: 'Sim',
+          onPress: async () => {
+            await tripStorage.remove()
+            router.navigate('/')
+          },
+        },
+      ])
+    } catch (error) {
+      console.log(error)
     }
   }
 
   useEffect(() => {
     getTripDetails()
   }, [])
+
+  if (isLoadingTrip) {
+    return <LoadingIndicator />
+  }
 
   return (
     <View className="flex-1 px-5 pt-16">
@@ -191,44 +214,43 @@ export default function Trip() {
         <Input.Field value={tripDetails.when} readOnly />
 
         <TouchableOpacity
-          onPress={() => setShowModal(MODAL.UPDATE_TRIP)}
           activeOpacity={0.6}
           className="h-9 w-9 items-center justify-center rounded bg-zinc-800"
+          onPress={() => setShowModal(MODAL.UPDATE_TRIP)}
         >
           <Settings2 color={colors.zinc[400]} size={20} />
         </TouchableOpacity>
       </Input>
 
-      {options === 'activity' ? (
+      {option === 'activity' ? (
         <Activities tripDetails={tripDetails} />
       ) : (
         <Details tripId={tripDetails.id} />
       )}
 
-      <View className="absolute -bottom-1 w-full justify-end self-center bg-zinc-950 pb-5">
+      <View className="absolute -bottom-1 z-10 w-full justify-end self-center bg-zinc-950 pb-5">
         <View className="w-full flex-row gap-2 rounded-lg border border-zinc-800 bg-zinc-900 p-4">
           <Button
             className="flex-1"
-            onPress={() => setOptions('activity')}
-            variant={options === 'activity' ? 'primary' : 'secondary'}
+            onPress={() => setOption('activity')}
+            variant={option === 'activity' ? 'primary' : 'secondary'}
           >
             <CalendarRange
               color={
-                options === 'activity' ? colors.lime[950] : colors.zinc[200]
+                option === 'activity' ? colors.lime[950] : colors.zinc[200]
               }
               size={20}
             />
             <Button.Title>Atividades</Button.Title>
           </Button>
+
           <Button
             className="flex-1"
-            onPress={() => setOptions('details')}
-            variant={options === 'details' ? 'primary' : 'secondary'}
+            onPress={() => setOption('details')}
+            variant={option === 'details' ? 'primary' : 'secondary'}
           >
             <Info
-              color={
-                options === 'details' ? colors.lime[950] : colors.zinc[200]
-              }
+              color={option === 'details' ? colors.lime[950] : colors.zinc[200]}
               size={20}
             />
             <Button.Title>Detalhes</Button.Title>
@@ -238,7 +260,7 @@ export default function Trip() {
 
       <Modal
         title="Atualizar viagem"
-        subtitle="Somente quem criou a viagem pode editar"
+        subtitle="Somente quem criou a viagem pode editar."
         visible={showModal === MODAL.UPDATE_TRIP}
         onClose={() => setShowModal(MODAL.NONE)}
       >
@@ -249,22 +271,28 @@ export default function Trip() {
               placeholder="Para onde?"
               onChangeText={setDestination}
               value={destination}
-            ></Input.Field>
+            />
           </Input>
+
           <Input variant="secondary">
             <IconCalendar color={colors.zinc[400]} size={20} />
+
             <Input.Field
               placeholder="Quando?"
               value={selectedDates.formatDatesInText}
               onPressIn={() => setShowModal(MODAL.CALENDAR)}
               onFocus={() => Keyboard.dismiss()}
-            ></Input.Field>
+            />
           </Input>
-
-          <Button onPress={handleUpdateTrip} isLoading={isUpdatingTrip}>
-            <Button.Title>Atualizar</Button.Title>
-          </Button>
         </View>
+
+        <Button onPress={handleUpdateTrip} isLoading={isUpdatingTrip}>
+          <Button.Title>Atualizar</Button.Title>
+        </Button>
+
+        <TouchableOpacity activeOpacity={0.8} onPress={handleRemoveTrip}>
+          <Text className="mt-6 text-center text-red-400">Remover viagem</Text>
+        </TouchableOpacity>
       </Modal>
 
       <Modal
@@ -276,9 +304,10 @@ export default function Trip() {
         <View className="mt-4 gap-4">
           <Calendar
             minDate={dayjs().toISOString()}
-            onDayPress={handleSelectedDate}
+            onDayPress={handleSelectDate}
             markedDates={selectedDates.dates}
           />
+
           <Button onPress={() => setShowModal(MODAL.UPDATE_TRIP)}>
             <Button.Title>Confirmar</Button.Title>
           </Button>
@@ -286,16 +315,17 @@ export default function Trip() {
       </Modal>
 
       <Modal
-        title="Confirma presença"
+        title="Confirmar presença"
         visible={showModal === MODAL.CONFIRM_ATTENDANCE}
       >
         <View className="mt-4 gap-4">
           <Text className="my-2 font-regular leading-6 text-zinc-400">
-            Você foi convidado(a) para participar de uma viagem para{' '}
+            Você foi convidado (a) para participar de uma viagem para
             <Text className="font-semibold text-zinc-100">
+              {' '}
               {tripDetails.destination}{' '}
             </Text>
-            nas data de{' '}
+            nas datas de{' '}
             <Text className="font-semibold text-zinc-100">
               {dayjs(tripDetails.starts_at).date()} a{' '}
               {dayjs(tripDetails.ends_at).date()} de{' '}
