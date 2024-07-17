@@ -31,7 +31,10 @@ async function confirmTripByParticipantId({
   email,
 }: ParticipantConfirm) {
   try {
-    await api.patch(`/participants/${participantId}/confirm`, { name, email })
+    await api.patch(`/participants/${participantId}/confirm`, {
+      name,
+      email,
+    })
   } catch (error) {
     throw error
   }

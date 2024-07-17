@@ -1,21 +1,26 @@
+import { env } from '@/env'
+import { dayjs } from '@/lib/dayjs'
+import { prisma } from '@/lib/prisma'
+import nodemailer from 'nodemailer'
+import { getMailClient } from '@/mail'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
-import nodemailer from 'nodemailer'
-import { z } from 'zod'
-import { dayjs } from '../lib/dayjs'
-import { getMailClient } from '../lib/mail'
-import { prisma } from '../lib/prisma'
-import { ClientError } from '../errors/client-error'
-import { env } from '../env'
+import z from 'zod'
 
-export async function confirmTrip(app: FastifyInstance) {
+export const confirmTrip = async (app: FastifyInstance) => {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/trips/:tripId/confirm',
     {
       schema: {
+        tags: ['trips'],
+        summary: 'Confirm a trip and send e-mail invitations.',
         params: z.object({
           tripId: z.string().uuid(),
         }),
+        response: {
+          204: z.null(),
+          400: z.object({ message: z.string() }).describe('Bad request'),
+        },
       },
     },
     async (request, reply) => {
@@ -29,32 +34,39 @@ export async function confirmTrip(app: FastifyInstance) {
           participants: {
             where: {
               is_owner: false,
-            }
-          }
-        }
+            },
+          },
+        },
       })
 
+      const tripDetailsURL = new URL(`/trips/${tripId}`, env.WEB_BASE_URL)
+
       if (!trip) {
-        throw new ClientError('Trip not found.')
+        throw new Error('Trip not found')
       }
 
       if (trip.is_confirmed) {
-        return reply.redirect(`${env.WEB_BASE_URL}/trips/${tripId}`)
+        return reply.redirect(tripDetailsURL.toString())
       }
 
       await prisma.trip.update({
         where: { id: tripId },
-        data: { is_confirmed: true },
+        data: {
+          is_confirmed: true,
+        },
       })
-
-      const formattedStartDate = dayjs(trip.starts_at).format('LL')
-      const formattedEndDate = dayjs(trip.ends_at).format('LL')
 
       const mail = await getMailClient()
 
+      const formattedTripStartDate = dayjs(trip.starts_at).format('D[ de ]MMMM')
+      const formattedTripEndDate = dayjs(trip.ends_at).format('D[ de ]MMMM')
+
       await Promise.all(
         trip.participants.map(async (participant) => {
-          const confirmationLink = `${env.API_BASE_URL}/participants/${participant.id}/confirm`
+          const confirmationLink = new URL(
+            `/trips/${trip.id}/confirm/${participant.id}`,
+            env.WEB_BASE_URL,
+          )
 
           const message = await mail.sendMail({
             from: {
@@ -62,27 +74,26 @@ export async function confirmTrip(app: FastifyInstance) {
               address: 'oi@plann.er',
             },
             to: participant.email,
-            subject: `Confirme sua presença na viagem para ${trip.destination} em ${formattedStartDate}`,
+            subject: `Confirme sua presença na viagem para ${trip.destination} em ${formattedTripStartDate}`,
             html: `
             <div style="font-family: sans-serif; font-size: 16px; line-height: 1.6;">
-              <p>Você foi convidado(a) para participar de uma viagem para <strong>${trip.destination}</strong> nas datas de <strong>${formattedStartDate}</strong> até <strong>${formattedEndDate}</strong>.</p>
+              <p>Você foi convidado(a) para participar de uma viagem para <strong>${trip.destination}</strong> nas datas de <strong>${formattedTripStartDate} até ${formattedTripEndDate}</strong>.</p>
               <p></p>
               <p>Para confirmar sua presença na viagem, clique no link abaixo:</p>
               <p></p>
               <p>
-                <a href="${confirmationLink}">Confirmar viagem</a>
+                <a href="${confirmationLink.toString()}">Confirmar viagem</a>
               </p>
-              <p></p>
               <p>Caso você não saiba do que se trata esse e-mail, apenas ignore esse e-mail.</p>
             </div>
           `.trim(),
           })
-    
+
           console.log(nodemailer.getTestMessageUrl(message))
-        })
+        }),
       )
 
-      return reply.redirect(`${env.WEB_BASE_URL}/trips/${tripId}`)
+      return reply.redirect(tripDetailsURL.toString())
     },
   )
 }

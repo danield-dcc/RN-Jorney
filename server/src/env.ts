@@ -1,6 +1,9 @@
 import { z } from 'zod'
 
-const envSchema = z.object({
+export const envSchema = z.object({
+  NODE_ENV: z
+    .enum(['development', 'test', 'production'])
+    .default('development'),
   DATABASE_URL: z.string().url(),
   API_BASE_URL: z.string().url(),
   WEB_BASE_URL: z.string().url(),
